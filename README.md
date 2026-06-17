@@ -1,4 +1,4 @@
-﻿# Computer Recovery Toolkit
+# Computer Recovery Toolkit
 
 Windows computer diagnostics and recovery scripts for machines with bad standby,
 high battery drain, noisy fans, hybrid GPU weirdness, wake timers, driver issues,
@@ -128,6 +128,44 @@ Return to Windows default:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Set-AppGpuPreference.ps1 -ExePath "C:\Path\To\App.exe" -Mode Default
 ```
 
+
+### Internal display refresh automation
+
+For laptops whose internal panel supports multiple refresh rates, this installs a hidden Scheduled Task that switches only the internal display when AC power changes. It does not use QRes, does not poll in a loop, does not install a resident service, and does not target the primary monitor.
+
+List detected displays first:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Set-InternalDisplayRefresh.ps1 -Mode List
+```
+
+Install the AC/DC automation:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Set-InternalDisplayRefresh.ps1 -Mode InstallTask -BatteryHz 60 -AcHz 120
+```
+
+Apply once using the current power source:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Set-InternalDisplayRefresh.ps1 -Mode Auto
+```
+
+Remove the task:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Set-InternalDisplayRefresh.ps1 -Mode UninstallTask
+```
+
+Notes:
+
+- Runtime is hidden with `-WindowStyle Hidden`.
+- Installation may request UAC because task registration needs elevation.
+- The task runs on logon and `Kernel-Power` AC/DC events 104/105.
+- The script identifies the internal panel through Windows display WMI plus PnP ID matching; if the internal panel is disabled or unavailable, it exits without touching external monitors.
+- By default it removes a legacy task named `dynamic-refresh` to avoid old QRes automation conflicts. Use `-KeepLegacyQResTask` if you intentionally want to keep that task.
+- Log: `%LOCALAPPDATA%\ComputerRecoveryToolkit\internal-display-refresh-latest.log`.
+
 ### Optional aliases
 
 ```powershell
@@ -142,6 +180,7 @@ Aliases installed:
 - `computer-gpu`
 - `computer-gpu-drain`
 - `computer-gpu-pref`
+- `computer-refresh`
 - `computer-kit`
 
 ## Privacy
@@ -172,4 +211,5 @@ Copyright (C) 2026 Gabriel Ferreira.
 - Email: gabriel.ferreira7854@gmail.com
 - LinkedIn: https://www.linkedin.com/in/gabriel-ferreira-021a44140/
 - GitHub: https://github.com/wvxbs
+
 

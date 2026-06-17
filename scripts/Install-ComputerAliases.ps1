@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param()
 
 $kitRoot = Split-Path -Parent $PSScriptRoot
@@ -33,6 +33,10 @@ function Invoke-ComputerGpuPreference {
     & (Join-Path `$script:ComputerScripts "Set-AppGpuPreference.ps1") @args
 }
 
+function Invoke-ComputerDisplayRefresh {
+    & (Join-Path `$script:ComputerScripts "Set-InternalDisplayRefresh.ps1") @args
+}
+
 function Set-ComputerKitLocation {
     Set-Location -LiteralPath `$script:ComputerKitRoot
 }
@@ -43,6 +47,7 @@ Set-Alias computer-power-fix Invoke-ComputerPowerFix
 Set-Alias computer-gpu Invoke-ComputerGpuAnalyze
 Set-Alias computer-gpu-drain Invoke-ComputerGpuDrain
 Set-Alias computer-gpu-pref Invoke-ComputerGpuPreference
+Set-Alias computer-refresh Invoke-ComputerDisplayRefresh
 Set-Alias computer-kit Set-ComputerKitLocation
 "@
 
@@ -85,4 +90,3 @@ foreach ($profilePath in $profiles) {
 }
 
 Write-Host "Aliases installed. Open a new PowerShell/Windows Terminal tab."
-
