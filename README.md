@@ -164,3 +164,12 @@ settings, or by rerunning the script with different parameters.
 MIT. Use it, adapt it, and send it to the friend whose computer sounds like a
 jet engine while "sleeping".
 
+Copyright (C) 2026 Gabriel Ferreira.
+
+## Author And Contact
+
+- Author: Gabriel Ferreira
+- Email: gabriel.ferreira7854@gmail.com
+- LinkedIn: https://www.linkedin.com/in/gabriel-ferreira-021a44140/
+- GitHub: https://github.com/wvxbs
+
