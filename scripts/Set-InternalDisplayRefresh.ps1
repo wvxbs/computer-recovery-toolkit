@@ -370,7 +370,21 @@ function Install-RefreshTask {
 
     $scriptPath = $PSCommandPath
     $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-    $args = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`" -Mode Auto -BatteryHz $BatteryHz -AcHz $AcHz -Quiet"
+        $launcherPath = Join-Path (Split-Path -Parent $PSCommandPath) "Run-InternalDisplayRefreshHidden.vbs"
+    $launcher = @"
+Option Explicit
+Dim shell, fso, scriptDir, psScript, cmd
+Set shell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+psScript = fso.BuildPath(scriptDir, "Set-InternalDisplayRefresh.ps1")
+cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """ -Mode Auto -BatteryHz $BatteryHz -AcHz $AcHz -Quiet"
+shell.Run cmd, 0, False
+"@
+    Set-Content -LiteralPath $launcherPath -Value $launcher -Encoding ASCII
+    $scriptPath = $launcherPath
+    $ps = Join-Path $env:SystemRoot "System32\wscript.exe"
+    $args = "//B //Nologo `"$scriptPath`""
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 
     $xml = @"
@@ -448,6 +462,8 @@ switch ($Mode) {
         Set-InternalRefreshForPowerState
     }
 }
+
+
 
 
 
