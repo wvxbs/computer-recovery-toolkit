@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Win32;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -29,6 +30,10 @@ public sealed partial class MainWindow : Window
     private Button _gpuButton = null!;
     private Button _refreshListButton = null!;
     private Button _refreshInstallButton = null!;
+    private Button _installButton = null!;
+    private Button _repairButton = null!;
+    private Button _uninstallButton = null!;
+    private TextBlock _installStateText = null!;
     private Button _openRepoButton = null!;
 
     public MainWindow()
@@ -41,6 +46,7 @@ public sealed partial class MainWindow : Window
         TryApplyBackdrop();
         Content = BuildContent();
         ApplyLanguage();
+        RefreshInstallState();
     }
 
     private UIElement BuildContent()
@@ -75,6 +81,7 @@ public sealed partial class MainWindow : Window
         tabs.TabItems.Add(new TabViewItem { Header = T("tabPower"), Content = BuildPowerTab() });
         tabs.TabItems.Add(new TabViewItem { Header = T("tabGpu"), Content = BuildGpuTab() });
         tabs.TabItems.Add(new TabViewItem { Header = T("tabDownloads"), Content = BuildDownloadsTab() });
+        tabs.TabItems.Add(new TabViewItem { Header = T("tabInstall"), Content = BuildInstallTab() });
         Grid.SetRow(tabs, 2);
         _root.Children.Add(tabs);
 
@@ -240,6 +247,29 @@ public sealed partial class MainWindow : Window
         return Wrap(panel);
     }
 
+    private UIElement BuildInstallTab()
+    {
+        var panel = NewPanel();
+        panel.Children.Add(SectionTitle("installTitle", "installText"));
+
+        _installStateText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.82
+        };
+        panel.Children.Add(_installStateText);
+
+        var row = NewButtonRow();
+        _installButton = ActionButton("installApp", async (_, _) => await InstallOrRepairAsync(repair: false));
+        _repairButton = ActionButton("repairApp", async (_, _) => await InstallOrRepairAsync(repair: true));
+        _uninstallButton = ActionButton("uninstallApp", async (_, _) => await UninstallAsync());
+        row.Children.Add(_installButton);
+        row.Children.Add(_repairButton);
+        row.Children.Add(_uninstallButton);
+        panel.Children.Add(row);
+        return Wrap(panel);
+    }
+
     private static StackPanel NewPanel() => new() { Spacing = 14, Padding = new Thickness(2) };
 
     private static StackPanel NewButtonRow() => new() { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -306,6 +336,181 @@ public sealed partial class MainWindow : Window
         if (max > 0) { args.AddRange(["-MaxMinutes", max.ToString()]); }
         await RunScriptDetachedAsync("Start-TemporaryDownloadMode.ps1", args.ToArray());
     }
+
+    private async Task InstallOrRepairAsync(bool repair)
+    {
+        SetBusy(true);
+        ClearOutput();
+        try
+        {
+            await Task.Run(() =>
+            {
+                Directory.CreateDirectory(InstallDir);
+                if (!IsRunningFromInstallDir)
+                {
+                    CopyDirectory(AppContext.BaseDirectory, InstallDir);
+                }
+
+                CreateStartMenuLauncher();
+                CreateUninstaller();
+                RegisterUninstallEntry();
+            });
+
+            RefreshInstallState();
+            _status.Severity = InfoBarSeverity.Success;
+            _status.Title = repair ? T("repaired") : T("installed");
+            _status.Message = InstallDir;
+            AppendOutput($"{T("installLocation")}: {InstallDir}");
+        }
+        catch (Exception ex)
+        {
+            _status.Severity = InfoBarSeverity.Error;
+            _status.Title = T("failed");
+            _status.Message = ex.Message;
+            AppendOutput(ex.ToString());
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task UninstallAsync()
+    {
+        SetBusy(true);
+        ClearOutput();
+        try
+        {
+            await Task.Run(() =>
+            {
+                RemoveStartMenuLauncher();
+                RemoveUninstallEntry();
+
+                if (IsRunningFromInstallDir)
+                {
+                    var cleanup = Path.Combine(Path.GetTempPath(), $"computer-recovery-toolkit-uninstall-{Guid.NewGuid():N}.cmd");
+                    File.WriteAllText(cleanup, BuildSelfRemovalCommand(), Encoding.ASCII);
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = cleanup,
+                        UseShellExecute = true,
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    });
+                    DispatcherQueue.TryEnqueue(Close);
+                }
+                else if (Directory.Exists(InstallDir))
+                {
+                    Directory.Delete(InstallDir, recursive: true);
+                }
+            });
+
+            RefreshInstallState();
+            _status.Severity = InfoBarSeverity.Success;
+            _status.Title = T("uninstalled");
+            _status.Message = T("uninstalledText");
+        }
+        catch (Exception ex)
+        {
+            _status.Severity = InfoBarSeverity.Error;
+            _status.Title = T("failed");
+            _status.Message = ex.Message;
+            AppendOutput(ex.ToString());
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private void RefreshInstallState()
+    {
+        if (_installStateText is null) return;
+        var installed = File.Exists(InstalledExe);
+        var runningInstalled = IsRunningFromInstallDir;
+        _installStateText.Text = installed
+            ? string.Format(T("installedState"), InstallDir, runningInstalled ? T("yes") : T("no"))
+            : T("notInstalledState");
+        if (_repairButton is not null) _repairButton.IsEnabled = installed;
+        if (_uninstallButton is not null) _uninstallButton.IsEnabled = installed;
+    }
+
+    private static void CopyDirectory(string sourceDir, string destinationDir)
+    {
+        var source = new DirectoryInfo(sourceDir);
+        Directory.CreateDirectory(destinationDir);
+
+        foreach (var file in source.EnumerateFiles())
+        {
+            var target = Path.Combine(destinationDir, file.Name);
+            file.CopyTo(target, overwrite: true);
+        }
+
+        foreach (var directory in source.EnumerateDirectories())
+        {
+            if (directory.FullName.Equals(destinationDir, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            CopyDirectory(directory.FullName, Path.Combine(destinationDir, directory.Name));
+        }
+    }
+
+    private static void CreateStartMenuLauncher()
+    {
+        Directory.CreateDirectory(StartMenuProgramsDir);
+        var content = $"""
+        @echo off
+        start "" "{InstalledExe}" %*
+        """;
+        File.WriteAllText(StartMenuLauncher, content, Encoding.ASCII);
+    }
+
+    private static void RemoveStartMenuLauncher()
+    {
+        File.Delete(StartMenuLauncher);
+    }
+
+    private static void CreateUninstaller()
+    {
+        File.WriteAllText(UninstallCommand, BuildExternalUninstallCommand(), Encoding.ASCII);
+    }
+
+    private static void RegisterUninstallEntry()
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(UninstallRegistryPath);
+        key?.SetValue("DisplayName", "Computer Recovery Toolkit");
+        key?.SetValue("DisplayVersion", AppVersion);
+        key?.SetValue("Publisher", "Gabriel Ferreira");
+        key?.SetValue("InstallLocation", InstallDir);
+        key?.SetValue("DisplayIcon", InstalledExe);
+        key?.SetValue("NoModify", 1, RegistryValueKind.DWord);
+        key?.SetValue("NoRepair", 0, RegistryValueKind.DWord);
+        key?.SetValue("UninstallString", $"\"{UninstallCommand}\"");
+        key?.SetValue("QuietUninstallString", $"\"{UninstallCommand}\"");
+    }
+
+    private static void RemoveUninstallEntry()
+    {
+        Registry.CurrentUser.DeleteSubKeyTree(UninstallRegistryPath, throwOnMissingSubKey: false);
+    }
+
+    private static string BuildExternalUninstallCommand() => $"""
+        @echo off
+        set "APPDIR={InstallDir}"
+        del "{StartMenuLauncher}" >nul 2>nul
+        reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\ComputerRecoveryToolkit" /f >nul 2>nul
+        taskkill /IM ComputerRecoveryToolkit.WinUI.exe /F >nul 2>nul
+        timeout /t 2 /nobreak >nul
+        rmdir /s /q "%APPDIR%" >nul 2>nul
+        """;
+
+    private static string BuildSelfRemovalCommand() => $"""
+        @echo off
+        timeout /t 2 /nobreak >nul
+        rmdir /s /q "{InstallDir}" >nul 2>nul
+        del "%~f0" >nul 2>nul
+        """;
 
     private async Task RunScriptAsync(string scriptName, params string[] args)
     {
@@ -413,10 +618,14 @@ public sealed partial class MainWindow : Window
         if (_gpuButton is not null) _gpuButton.Content = T("checkGpu");
         if (_refreshListButton is not null) _refreshListButton.Content = T("listDisplays");
         if (_refreshInstallButton is not null) _refreshInstallButton.Content = T("installRefresh");
+        if (_installButton is not null) _installButton.Content = T("installApp");
+        if (_repairButton is not null) _repairButton.Content = T("repairApp");
+        if (_uninstallButton is not null) _uninstallButton.Content = T("uninstallApp");
         if (_hibernateMinutes is not null) _hibernateMinutes.Header = T("hibernateMinutes");
         if (_downloadTimer is not null) _downloadTimer.Header = T("maxMinutes");
         if (_idleTimer is not null) _idleTimer.Header = T("idleMinutes");
         if (_cpuCap is not null) _cpuCap.Header = T("cpuCap");
+        RefreshInstallState();
     }
 
     private void AppendOutput(string text)
@@ -469,6 +678,27 @@ public sealed partial class MainWindow : Window
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe")
             : "powershell.exe";
 
+    private static string InstallDir =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "ComputerRecoveryToolkit");
+
+    private static string InstalledExe => Path.Combine(InstallDir, "ComputerRecoveryToolkit.WinUI.exe");
+
+    private static string StartMenuProgramsDir =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Windows", "Start Menu", "Programs");
+
+    private static string StartMenuLauncher => Path.Combine(StartMenuProgramsDir, "Computer Recovery Toolkit.cmd");
+
+    private static string UninstallCommand => Path.Combine(InstallDir, "uninstall.cmd");
+
+    private const string UninstallRegistryPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\ComputerRecoveryToolkit";
+
+    private static string AppVersion =>
+        typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+
+    private static bool IsRunningFromInstallDir =>
+        Path.GetFullPath(AppContext.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Equals(Path.GetFullPath(InstallDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+
     private static string RepoRoot
     {
         get
@@ -500,6 +730,7 @@ public sealed partial class MainWindow : Window
             ["tabPower"] = "Energia",
             ["tabGpu"] = "GPU e tela",
             ["tabDownloads"] = "Downloads",
+            ["tabInstall"] = "Instalacao",
             ["diagnosticsTitle"] = "Relatorios do computador",
             ["diagnosticsText"] = "Gera pacotes de diagnostico e traces de energia para analise humana ou por LLM.",
             ["runDiagnostics"] = "Gerar diagnostico",
@@ -520,6 +751,21 @@ public sealed partial class MainWindow : Window
             ["idleMinutes"] = "Sair apos minutos ociosos",
             ["cpuCap"] = "Limite de CPU (%)",
             ["startDownloadMode"] = "Abrir modo download"
+            ,
+            ["installTitle"] = "Instalacao local",
+            ["installText"] = "Copia o app portable para o perfil do usuario, cria atalho no Menu Iniciar e registra a desinstalacao sem pedir admin.",
+            ["installApp"] = "Instalar",
+            ["repairApp"] = "Reparar",
+            ["uninstallApp"] = "Desinstalar",
+            ["installed"] = "Instalado",
+            ["repaired"] = "Reparado",
+            ["uninstalled"] = "Desinstalado",
+            ["uninstalledText"] = "A instalacao local foi removida.",
+            ["installLocation"] = "Local de instalacao",
+            ["installedState"] = "Instalado em: {0}\nRodando da instalacao local: {1}",
+            ["notInstalledState"] = "Ainda nao instalado neste usuario. Voce pode usar como portable ou instalar para aparecer no Menu Iniciar.",
+            ["yes"] = "sim",
+            ["no"] = "nao"
         },
         ["en"] = new()
         {
@@ -538,6 +784,7 @@ public sealed partial class MainWindow : Window
             ["tabPower"] = "Power",
             ["tabGpu"] = "GPU and display",
             ["tabDownloads"] = "Downloads",
+            ["tabInstall"] = "Install",
             ["diagnosticsTitle"] = "Computer reports",
             ["diagnosticsText"] = "Creates diagnostic bundles and energy traces for human or LLM analysis.",
             ["runDiagnostics"] = "Collect diagnostics",
@@ -557,7 +804,21 @@ public sealed partial class MainWindow : Window
             ["maxMinutes"] = "Max timer, 0 = unlimited",
             ["idleMinutes"] = "Exit after idle minutes",
             ["cpuCap"] = "CPU cap (%)",
-            ["startDownloadMode"] = "Open download mode"
+            ["startDownloadMode"] = "Open download mode",
+            ["installTitle"] = "Local install",
+            ["installText"] = "Copies the portable app to the user profile, creates a Start Menu launcher, and registers uninstall without admin rights.",
+            ["installApp"] = "Install",
+            ["repairApp"] = "Repair",
+            ["uninstallApp"] = "Uninstall",
+            ["installed"] = "Installed",
+            ["repaired"] = "Repaired",
+            ["uninstalled"] = "Uninstalled",
+            ["uninstalledText"] = "The local install was removed.",
+            ["installLocation"] = "Install location",
+            ["installedState"] = "Installed at: {0}\nRunning from local install: {1}",
+            ["notInstalledState"] = "Not installed for this user yet. You can keep using it as portable or install it into the Start Menu.",
+            ["yes"] = "yes",
+            ["no"] = "no"
         }
     };
 

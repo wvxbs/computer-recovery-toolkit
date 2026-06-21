@@ -23,7 +23,8 @@ are split into explicit scripts.
 - Offers a temporary AC-only download mode for launchers that do not reliably
   keep downloading during Modern Standby.
 - Offers an optional WinUI 3 app for people who prefer a native Windows UI over
-  direct PowerShell usage.
+  direct PowerShell usage, with portable use plus per-user install, repair, and
+  uninstall actions.
 - Installs optional PowerShell aliases for faster troubleshooting.
 
 ## What this kit does not do
@@ -149,30 +150,35 @@ Behavior:
 
 The native app is optional; the scripts remain the core implementation.
 
-Build locally:
+Download the portable zip from
+[GitHub Releases](https://github.com/wvxbs/computer-recovery-toolkit/releases),
+extract it, and run `ComputerRecoveryToolkit.WinUI.exe`. The app can stay
+portable or install itself into the current Windows user profile without admin
+rights. The install tab adds a Start Menu launcher and a normal uninstall entry.
+
+Release builds are meant to be signed. If a zip came from a CI artifact instead
+of the Releases page, Windows Defender/SmartScreen may warn because that package
+is only a test artifact.
+
+Build a local portable zip:
 
 ```powershell
-dotnet publish .\winui\ComputerRecoveryToolkit.WinUI\ComputerRecoveryToolkit.WinUI.csproj `
-  -c Release `
-  -r win-x64 `
-  --self-contained true `
-  -p:Platform=x64 `
-  -p:WindowsPackageType=None `
-  -o .\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Package-WinUIRelease.ps1
 ```
 
 Run:
 
 ```powershell
-.\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64\ComputerRecoveryToolkit.WinUI.exe
+Expand-Archive .\artifacts\ComputerRecoveryToolkit-WinUI3-portable-win-x64.zip .\artifacts\app
+.\artifacts\app\ComputerRecoveryToolkit.WinUI.exe
 ```
 
-The GitHub Actions workflow `Build WinUI 3 artifact` publishes
-`ComputerRecoveryToolkit-WinUI3-windows-x64` under run artifacts. The UI includes
-a Portuguese/English language selector. Signing is supported when
-`CODESIGN_PFX_BASE64` and `CODESIGN_PFX_PASSWORD` repository secrets are set;
-otherwise the workflow publishes an unsigned artifact instead of pretending to
-be trusted. See [docs/WINUI_APP.md](docs/WINUI_APP.md).
+The GitHub Actions workflow `Release WinUI portable app` attaches
+`ComputerRecoveryToolkit-WinUI3-portable-win-x64.zip` and `SHA256SUMS.txt` to a
+GitHub Release. Signing is supported when `CODESIGN_PFX_BASE64` and
+`CODESIGN_PFX_PASSWORD` repository secrets are set. Release packaging requires
+signing by default; an unsigned release must be explicitly requested and may be
+blocked by Windows reputation systems. See [docs/WINUI_APP.md](docs/WINUI_APP.md).
 
 ### Hybrid GPU process check
 

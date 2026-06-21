@@ -24,31 +24,19 @@ jobs:
       - name: Build
         run: dotnet build .\winui\ComputerRecoveryToolkit.WinUI\ComputerRecoveryToolkit.WinUI.csproj -c Release -p:Platform=x64 --no-restore
 
-      - name: Publish portable artifact
-        run: >
-          dotnet publish .\winui\ComputerRecoveryToolkit.WinUI\ComputerRecoveryToolkit.WinUI.csproj
-          -c Release
-          -r win-x64
-          --self-contained true
-          -p:Platform=x64
-          -p:WindowsPackageType=None
-          -o .\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64
-
-      - name: Sign artifact if certificate secrets exist
+      - name: Package portable test artifact
         shell: pwsh
         env:
           CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
           CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:CODESIGN_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:CODESIGN_PFX_PASSWORD)) {
-            Write-Host "Code signing secrets not configured; publishing unsigned artifact."
-            exit 0
-          }
-          .\scripts\Sign-WindowsArtifact.ps1 -ArtifactDir .\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64
+          .\scripts\Package-WinUIRelease.ps1 -PackageName ComputerRecoveryToolkit-WinUI3-portable-win-x64-ci
 
       - name: Upload WinUI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ComputerRecoveryToolkit-WinUI3-windows-x64
-          path: .\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64
+          name: ComputerRecoveryToolkit-WinUI3-portable-win-x64-ci
+          path: |
+            .\artifacts\ComputerRecoveryToolkit-WinUI3-portable-win-x64-ci.zip
+            .\artifacts\SHA256SUMS.txt
           if-no-files-found: error

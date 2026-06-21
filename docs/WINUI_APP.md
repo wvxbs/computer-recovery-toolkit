@@ -14,48 +14,77 @@ shows their output in a friendlier Windows interface.
 - List internal/external displays.
 - Install the internal display refresh automation.
 - Start temporary download mode with timer, idle exit, and CPU cap controls.
+- Install, repair, or uninstall the app for the current Windows user without
+  requiring administrator rights.
+
+## Download from Releases
+
+For normal use, download the portable zip from:
+
+```text
+https://github.com/wvxbs/computer-recovery-toolkit/releases
+```
+
+Extract `ComputerRecoveryToolkit-WinUI3-portable-win-x64.zip` and run
+`ComputerRecoveryToolkit.WinUI.exe`. The app can run directly from that extracted
+folder, or you can open the Install tab and choose:
+
+- Install: copies the portable folder to
+  `%LOCALAPPDATA%\Programs\ComputerRecoveryToolkit`, adds a Start Menu launcher,
+  and registers an uninstall entry under the current user.
+- Repair: refreshes the launcher and uninstall metadata.
+- Uninstall: removes the per-user install. Portable copies are left alone.
 
 ## Build locally
 
 ```powershell
-dotnet publish .\winui\ComputerRecoveryToolkit.WinUI\ComputerRecoveryToolkit.WinUI.csproj `
-  -c Release `
-  -r win-x64 `
-  --self-contained true `
-  -p:Platform=x64 `
-  -p:WindowsPackageType=None `
-  -o .\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Package-WinUIRelease.ps1
 ```
 
 Run:
 
 ```powershell
-.\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64\ComputerRecoveryToolkit.WinUI.exe
+Expand-Archive .\artifacts\ComputerRecoveryToolkit-WinUI3-portable-win-x64.zip .\artifacts\app
+.\artifacts\app\ComputerRecoveryToolkit.WinUI.exe
 ```
 
-## GitHub artifact
+## GitHub Actions
 
-The workflow `Build WinUI 3 artifact` publishes:
+The workflow `Build WinUI 3 artifact` publishes a CI test zip. It is useful for
+checking changes, but it may be unsigned and should not be treated as the public
+download.
+
+The workflow `Release WinUI portable app` publishes these files to the Releases
+page:
 
 ```text
-ComputerRecoveryToolkit-WinUI3-windows-x64
+ComputerRecoveryToolkit-WinUI3-portable-win-x64.zip
+SHA256SUMS.txt
 ```
 
-Download the artifact from the GitHub Actions run, extract it, and run
-`ComputerRecoveryToolkit.WinUI.exe`.
+Release workflow triggers:
+
+- Push a tag like `v0.1.0`; or
+- Run the workflow manually and provide a tag.
 
 ## Signing
 
-The workflow can sign the WinUI executable when these repository secrets exist:
+The release workflow signs the WinUI executable when these repository secrets
+exist:
 
 ```text
 CODESIGN_PFX_BASE64
 CODESIGN_PFX_PASSWORD
 ```
 
-Without those secrets, the artifact is intentionally published unsigned. The
-project does not fake trust or bypass Windows reputation systems; proper
-distribution should use a real code-signing certificate.
+Release packaging requires signing by default. You can intentionally allow an
+unsigned release through the manual workflow input, but Windows Defender or
+SmartScreen may block it because unsigned, new, self-contained desktop apps have
+little reputation.
+
+This project does not disable Defender, add exclusions, or fake trust. The
+proper fix for public distribution is a real code-signing certificate with a
+timestamp, plus stable versioned Releases and checksums.
 
 ## License and contact
 

@@ -1,0 +1,72 @@
+name: Release WinUI portable app
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.1.0"
+        required: true
+        type: string
+      allow_unsigned:
+        description: "Allow an unsigned release asset. This may trigger Defender/SmartScreen."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release-winui:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Resolve release tag
+        id: release
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ inputs.tag }}"
+          }
+          if ([string]::IsNullOrWhiteSpace($tag) -or $tag -notmatch '^v') {
+            throw "Release tag must start with v, for example v0.1.0"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Package signed portable release
+        shell: pwsh
+        env:
+          CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
+          CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
+        run: |
+          $allowUnsigned = "${{ inputs.allow_unsigned }}" -eq "true"
+          $args = @("-PackageName", "ComputerRecoveryToolkit-WinUI3-portable-win-x64")
+          if ($allowUnsigned) {
+            Write-Warning "Creating an unsigned release asset by explicit request. Defender/SmartScreen may block it."
+          } else {
+            $args += "-RequireSigning"
+          }
+          .\scripts\Package-WinUIRelease.ps1 @args
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: Computer Recovery Toolkit ${{ steps.release.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            artifacts/ComputerRecoveryToolkit-WinUI3-portable-win-x64.zip
+            artifacts/SHA256SUMS.txt
