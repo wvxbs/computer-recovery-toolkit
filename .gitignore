@@ -1,4 +1,9 @@
-﻿reports/
+reports/
+artifacts/
+bin/
+obj/
+**/bin/
+**/obj/
 *.zip
 *.etl
 *.cab
@@ -10,4 +15,3 @@
 *.bak
 Thumbs.db
 .DS_Store
-

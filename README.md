@@ -22,6 +22,8 @@ are split into explicit scripts.
   dedicated GPU awake after dock/monitor changes.
 - Offers a temporary AC-only download mode for launchers that do not reliably
   keep downloading during Modern Standby.
+- Offers an optional WinUI 3 app for people who prefer a native Windows UI over
+  direct PowerShell usage.
 - Installs optional PowerShell aliases for faster troubleshooting.
 
 ## What this kit does not do
@@ -116,10 +118,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Apply-Computer
 Steam, Epic, Riot, Xbox, and other launchers may not keep downloading reliably
 inside true Modern Standby. This temporary mode keeps the computer awake only
 while its PowerShell window is open, only on AC power, with the display turning
-off quickly and the CPU capped to reduce heat with the lid closed.
+off quickly and the CPU capped to reduce heat with the lid closed. It can also
+stop automatically after a timer or after configured launchers become idle.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-TemporaryDownloadMode.ps1
+```
+
+With a 4-hour maximum and 20-minute idle exit:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-TemporaryDownloadMode.ps1 -MaxMinutes 240 -IdleExitMinutes 20
 ```
 
 Behavior:
@@ -129,8 +138,41 @@ Behavior:
 - makes lid close do nothing only on AC;
 - turns the display off quickly;
 - caps processor maximum on AC, default `70%`;
+- watches Steam, Epic, Riot, Xbox/Microsoft Store/Gaming Services, disk, and
+  network activity;
+- keeps running while relevant launcher I/O, disk verification, or network
+  movement is active;
 - restores previous settings on `Q`, Enter, Esc, Ctrl+C, AC removal, or window close;
 - uses a hidden watchdog to restore settings if the main window is killed.
+
+### Optional WinUI 3 app
+
+The native app is optional; the scripts remain the core implementation.
+
+Build locally:
+
+```powershell
+dotnet publish .\winui\ComputerRecoveryToolkit.WinUI\ComputerRecoveryToolkit.WinUI.csproj `
+  -c Release `
+  -r win-x64 `
+  --self-contained true `
+  -p:Platform=x64 `
+  -p:WindowsPackageType=None `
+  -o .\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64
+```
+
+Run:
+
+```powershell
+.\artifacts\ComputerRecoveryToolkit-WinUI3-windows-x64\ComputerRecoveryToolkit.WinUI.exe
+```
+
+The GitHub Actions workflow `Build WinUI 3 artifact` publishes
+`ComputerRecoveryToolkit-WinUI3-windows-x64` under run artifacts. The UI includes
+a Portuguese/English language selector. Signing is supported when
+`CODESIGN_PFX_BASE64` and `CODESIGN_PFX_PASSWORD` repository secrets are set;
+otherwise the workflow publishes an unsigned artifact instead of pretending to
+be trusted. See [docs/WINUI_APP.md](docs/WINUI_APP.md).
 
 ### Hybrid GPU process check
 
