@@ -135,12 +135,14 @@ namespace ComputerRecoveryToolkit {
 }
 "@
     }
-    [void][ComputerRecoveryToolkit.NativePower]::SetThreadExecutionState(0x80000000 -bor 0x00000001)
+    $ES_CONTINUOUS = [uint32]"0x80000000"
+    $ES_SYSTEM_REQUIRED = [uint32]"0x00000001"
+    [void][ComputerRecoveryToolkit.NativePower]::SetThreadExecutionState([uint32]($ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED))
 }
 
 function Clear-ExecutionRequired {
     if ("ComputerRecoveryToolkit.NativePower" -as [type]) {
-        [void][ComputerRecoveryToolkit.NativePower]::SetThreadExecutionState(0x80000000)
+        [void][ComputerRecoveryToolkit.NativePower]::SetThreadExecutionState([uint32]"0x80000000")
     }
 }
 
