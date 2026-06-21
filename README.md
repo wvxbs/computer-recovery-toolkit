@@ -20,6 +20,8 @@ are split into explicit scripts.
 - Offers a conservative Modern Standby policy for battery drain control.
 - Offers a manual dGPU drain helper for shell/WebView processes that keep the
   dedicated GPU awake after dock/monitor changes.
+- Offers a temporary AC-only download mode for launchers that do not reliably
+  keep downloading during Modern Standby.
 - Installs optional PowerShell aliases for faster troubleshooting.
 
 ## What this kit does not do
@@ -91,6 +93,10 @@ Defaults:
 - Battery: wake timers disabled.
 - AC: never hibernate from idle.
 - Battery: hibernate after 120 minutes.
+- AC: Windows Energy Saver off.
+- Battery: Windows Energy Saver always on/aggressive.
+- AC: Intel Graphics Power Plan maximum performance, if the setting exists.
+- Battery: Intel Graphics Power Plan maximum battery life, if the setting exists.
 - Critical battery: hibernate.
 
 Customize battery hibernation:
@@ -98,6 +104,33 @@ Customize battery hibernation:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Apply-ComputerPowerPolicy.ps1 -Apply -BatteryHibernateAfterMinutes 90
 ```
+
+Skip optional Energy Saver or Intel Graphics policy:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Apply-ComputerPowerPolicy.ps1 -Apply -SkipEnergySaverPolicy -SkipIntelGraphicsPolicy
+```
+
+### Temporary download mode
+
+Steam, Epic, Riot, Xbox, and other launchers may not keep downloading reliably
+inside true Modern Standby. This temporary mode keeps the computer awake only
+while its PowerShell window is open, only on AC power, with the display turning
+off quickly and the CPU capped to reduce heat with the lid closed.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-TemporaryDownloadMode.ps1
+```
+
+Behavior:
+
+- refuses to start on battery;
+- prevents sleep only on AC;
+- makes lid close do nothing only on AC;
+- turns the display off quickly;
+- caps processor maximum on AC, default `70%`;
+- restores previous settings on `Q`, Enter, Esc, Ctrl+C, AC removal, or window close;
+- uses a hidden watchdog to restore settings if the main window is killed.
 
 ### Hybrid GPU process check
 
@@ -181,6 +214,7 @@ Aliases installed:
 - `computer-gpu-drain`
 - `computer-gpu-pref`
 - `computer-refresh`
+- `computer-download`
 - `computer-kit`
 
 ## Privacy

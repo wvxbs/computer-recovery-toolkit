@@ -22,7 +22,15 @@ Conservative policy used by this kit:
 - Disable network connectivity during Modern Standby on battery.
 - Keep connected Modern Standby on AC.
 - Disable wake timers on battery, allow them on AC.
+- Keep Windows Energy Saver aggressive on battery and off on AC, when supported.
+- Let Intel integrated graphics use more performance on AC and more savings on
+  battery, when the Intel power setting exists.
 
 This tries to preserve the "open the lid and work" feeling for short breaks,
 while protecting the battery during longer bag time.
+
+For game launchers and other Win32 apps that do not reliably download inside
+Modern Standby, use `scripts\Start-TemporaryDownloadMode.ps1`: it keeps the
+machine awake only while its console is open, only on AC power, and restores the
+previous power settings when it exits.
 

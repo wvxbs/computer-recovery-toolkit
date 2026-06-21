@@ -7,6 +7,8 @@ param(
     [string]$AcModernStandbyConnectivity = "Enable",
     [ValidateSet("Enable", "Disable", "WindowsManaged")]
     [string]$BatteryModernStandbyConnectivity = "Disable",
+    [switch]$SkipEnergySaverPolicy,
+    [switch]$SkipIntelGraphicsPolicy,
     [switch]$InstallEnforcerTask,
     [switch]$NoAdminRelaunch
 )
@@ -38,6 +40,8 @@ function Ensure-Admin {
         "-Apply",
         "-NoAdminRelaunch"
     )
+    if ($SkipEnergySaverPolicy) { $args += "-SkipEnergySaverPolicy" }
+    if ($SkipIntelGraphicsPolicy) { $args += "-SkipIntelGraphicsPolicy" }
     if ($InstallEnforcerTask) { $args += "-InstallEnforcerTask" }
     Start-Process $ps -Verb RunAs -ArgumentList $args
     exit
@@ -95,6 +99,16 @@ Invoke-PowerCfgChange "AC wake timers allowed" @("/setacvalueindex", "SCHEME_CUR
 Invoke-PowerCfgChange "Battery wake timers disabled" @("/setdcvalueindex", "SCHEME_CURRENT", "SUB_SLEEP", "RTCWAKE", "0")
 Invoke-PowerCfgChange "AC never hibernate by idle timer" @("/setacvalueindex", "SCHEME_CURRENT", "SUB_SLEEP", "HIBERNATEIDLE", "0")
 Invoke-PowerCfgChange "Battery hibernate after standby/idle window" @("/setdcvalueindex", "SCHEME_CURRENT", "SUB_SLEEP", "HIBERNATEIDLE", "$dcHibernateSeconds")
+if (-not $SkipEnergySaverPolicy) {
+    Invoke-PowerCfgChange "AC Energy Saver off" @("/setacvalueindex", "SCHEME_CURRENT", "de830923-a562-41af-a086-e3a2c6bad2da", "e69653ca-cf7f-4f05-aa73-cb833fa90ad4", "0")
+    Invoke-PowerCfgChange "Battery Energy Saver always on" @("/setdcvalueindex", "SCHEME_CURRENT", "de830923-a562-41af-a086-e3a2c6bad2da", "e69653ca-cf7f-4f05-aa73-cb833fa90ad4", "100")
+    Invoke-PowerCfgChange "AC Energy Saver policy normal" @("/setacvalueindex", "SCHEME_CURRENT", "de830923-a562-41af-a086-e3a2c6bad2da", "5c5bb349-ad29-4ee2-9d0b-2b25270f7a81", "0")
+    Invoke-PowerCfgChange "Battery Energy Saver policy aggressive" @("/setdcvalueindex", "SCHEME_CURRENT", "de830923-a562-41af-a086-e3a2c6bad2da", "5c5bb349-ad29-4ee2-9d0b-2b25270f7a81", "1")
+}
+if (-not $SkipIntelGraphicsPolicy) {
+    Invoke-PowerCfgChange "AC Intel Graphics maximum performance" @("/setacvalueindex", "SCHEME_CURRENT", "44f3beca-a7c0-460e-9df2-bb8b99e0cba6", "3619c3f2-afb2-4afc-b0e9-e7fef372de36", "2")
+    Invoke-PowerCfgChange "Battery Intel Graphics maximum battery life" @("/setdcvalueindex", "SCHEME_CURRENT", "44f3beca-a7c0-460e-9df2-bb8b99e0cba6", "3619c3f2-afb2-4afc-b0e9-e7fef372de36", "0")
+}
 Invoke-PowerCfgChange "Critical battery hibernates on AC" @("/setacvalueindex", "SCHEME_CURRENT", "SUB_BATTERY", "BATACTIONCRIT", "2")
 Invoke-PowerCfgChange "Critical battery hibernates on battery" @("/setdcvalueindex", "SCHEME_CURRENT", "SUB_BATTERY", "BATACTIONCRIT", "2")
 Invoke-PowerCfgChange "Critical battery level AC" @("/setacvalueindex", "SCHEME_CURRENT", "SUB_BATTERY", "BATLEVELCRIT", "2")
@@ -122,7 +136,9 @@ if ($Apply -and $InstallEnforcerTask) {
     $installed = Join-Path $ProgramDataRoot "Apply-ComputerPowerPolicy.ps1"
     Copy-Item -LiteralPath $PSCommandPath -Destination $installed -Force
     $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-    $taskRun = "$ps -NoProfile -ExecutionPolicy Bypass -File `"$installed`" -Apply -NoAdminRelaunch -BatteryHibernateAfterMinutes $BatteryHibernateAfterMinutes -AcModernStandbyConnectivity $AcModernStandbyConnectivity -BatteryModernStandbyConnectivity $BatteryModernStandbyConnectivity"
+    $skipEnergy = if ($SkipEnergySaverPolicy) { " -SkipEnergySaverPolicy" } else { "" }
+    $skipIntel = if ($SkipIntelGraphicsPolicy) { " -SkipIntelGraphicsPolicy" } else { "" }
+    $taskRun = "$ps -NoProfile -ExecutionPolicy Bypass -File `"$installed`" -Apply -NoAdminRelaunch -BatteryHibernateAfterMinutes $BatteryHibernateAfterMinutes -AcModernStandbyConnectivity $AcModernStandbyConnectivity -BatteryModernStandbyConnectivity $BatteryModernStandbyConnectivity$skipEnergy$skipIntel"
     & schtasks.exe /Create /TN "\ComputerRecoveryToolkit_PowerPolicy" /SC MINUTE /MO 15 /RU SYSTEM /RL HIGHEST /TR $taskRun /F 2>&1 |
         ForEach-Object { Write-Log "schtasks: $_" }
 }

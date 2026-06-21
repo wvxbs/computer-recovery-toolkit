@@ -37,6 +37,10 @@ function Invoke-ComputerDisplayRefresh {
     & (Join-Path `$script:ComputerScripts "Set-InternalDisplayRefresh.ps1") @args
 }
 
+function Start-ComputerDownloadMode {
+    & (Join-Path `$script:ComputerScripts "Start-TemporaryDownloadMode.ps1") @args
+}
+
 function Set-ComputerKitLocation {
     Set-Location -LiteralPath `$script:ComputerKitRoot
 }
@@ -48,6 +52,7 @@ Set-Alias computer-gpu Invoke-ComputerGpuAnalyze
 Set-Alias computer-gpu-drain Invoke-ComputerGpuDrain
 Set-Alias computer-gpu-pref Invoke-ComputerGpuPreference
 Set-Alias computer-refresh Invoke-ComputerDisplayRefresh
+Set-Alias computer-download Start-ComputerDownloadMode
 Set-Alias computer-kit Set-ComputerKitLocation
 "@
 
