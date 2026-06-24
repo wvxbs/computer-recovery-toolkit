@@ -253,6 +253,19 @@ Notes:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-ComputerAliases.ps1
 ```
 
+Run the installer from the Windows account that should receive the aliases. For
+multi-user machines, use Windows "Run as different user" or sign into the other
+account and run the same command there. The script writes only that user's
+PowerShell profiles.
+
+By default it installs every alias group. You can install only part of the
+toolkit:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-ComputerAliases.ps1 -GpuOnly
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-ComputerAliases.ps1 -Diagnostics -Gpu
+```
+
 Aliases installed:
 
 - `computer-diag`
@@ -264,6 +277,16 @@ Aliases installed:
 - `computer-refresh`
 - `computer-download`
 - `computer-kit`
+
+Selection flags:
+
+- `-All`: install everything, same as the default.
+- `-Diagnostics`: diagnostics and energy trace aliases.
+- `-Power`: power policy alias.
+- `-Gpu` or `-GpuOnly`: GPU analysis/drain/preference aliases.
+- `-Display`: internal display refresh alias.
+- `-Download`: temporary download mode alias.
+- `-Navigation`: folder navigation alias.
 
 ## Privacy
 

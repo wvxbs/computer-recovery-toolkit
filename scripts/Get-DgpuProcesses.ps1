@@ -19,6 +19,24 @@ function Exit-Tool {
     exit $Code
 }
 
+function Find-NvidiaSmi {
+    $candidates = @(
+        (Join-Path $env:WINDIR "System32\nvidia-smi.exe"),
+        "$env:ProgramFiles\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+        "${env:ProgramFiles(x86)}\NVIDIA Corporation\NVSMI\nvidia-smi.exe"
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    $command = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { return $command.Source }
+    return $null
+}
+
 if (-not $Raw -and -not (Test-IsAdministrator)) {
     Start-Process powershell.exe -ArgumentList @(
         "-NoProfile",
@@ -29,8 +47,8 @@ if (-not $Raw -and -not (Test-IsAdministrator)) {
     exit
 }
 
-$smi = Join-Path $env:WINDIR "System32\nvidia-smi.exe"
-if (-not (Test-Path -LiteralPath $smi)) {
+$smi = Find-NvidiaSmi
+if (-not $smi) {
     if (-not $Raw) { Write-Host "nvidia-smi.exe not found. This is normal without NVIDIA GPUs." -ForegroundColor Yellow }
     Exit-Tool 0
 }

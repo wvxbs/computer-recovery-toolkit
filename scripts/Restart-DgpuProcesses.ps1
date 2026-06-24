@@ -9,6 +9,24 @@ function Test-IsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Find-NvidiaSmi {
+    $candidates = @(
+        (Join-Path $env:WINDIR "System32\nvidia-smi.exe"),
+        "$env:ProgramFiles\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+        "${env:ProgramFiles(x86)}\NVIDIA Corporation\NVSMI\nvidia-smi.exe"
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    $command = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { return $command.Source }
+    return $null
+}
+
 if (-not (Test-IsAdministrator)) {
     $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
     if (-not [string]::IsNullOrWhiteSpace($List)) { $args += @("-List", "`"$List`"") }
@@ -16,8 +34,8 @@ if (-not (Test-IsAdministrator)) {
     exit
 }
 
-$smi = Join-Path $env:WINDIR "System32\nvidia-smi.exe"
-if (-not (Test-Path -LiteralPath $smi)) {
+$smi = Find-NvidiaSmi
+if (-not $smi) {
     Write-Host "nvidia-smi.exe not found." -ForegroundColor Yellow
     Read-Host "Press Enter to exit"
     exit 0

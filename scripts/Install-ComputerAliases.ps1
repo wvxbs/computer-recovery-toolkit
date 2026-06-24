@@ -1,68 +1,125 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$All,
+    [switch]$Diagnostics,
+    [switch]$Power,
+    [switch]$Gpu,
+    [switch]$Display,
+    [switch]$Download,
+    [switch]$Navigation,
+    [switch]$GpuOnly
+)
+
+$ErrorActionPreference = "Stop"
 
 $kitRoot = Split-Path -Parent $PSScriptRoot
 $toolsPath = Join-Path $PSScriptRoot "Computer-PowerShell-Tools.ps1"
 
-$content = @"
-# Computer Recovery Toolkit helper commands.
-`$script:ComputerKitRoot = "$kitRoot"
-`$script:ComputerScripts = Join-Path `$script:ComputerKitRoot "scripts"
+if ($GpuOnly) {
+    $Gpu = $true
+}
 
+$explicitSelection = $All -or $Diagnostics -or $Power -or $Gpu -or $Display -or $Download -or $Navigation -or $GpuOnly
+if (-not $explicitSelection -or $All) {
+    $Diagnostics = $true
+    $Power = $true
+    $Gpu = $true
+    $Display = $true
+    $Download = $true
+    $Navigation = $true
+}
+
+$functions = New-Object System.Collections.Generic.List[string]
+$aliases = New-Object System.Collections.Generic.List[string]
+
+if ($Diagnostics) {
+    $functions.Add(@'
 function Invoke-ComputerDiagnostics {
-    & (Join-Path `$script:ComputerScripts "Collect-ComputerDiagnostics.ps1") @args
+    & (Join-Path $script:ComputerScripts "Collect-ComputerDiagnostics.ps1") @args
 }
 
 function Invoke-ComputerEnergyDiagnostics {
-    & (Join-Path `$script:ComputerScripts "Collect-ComputerDiagnostics.ps1") -IncludeEnergyTrace @args
+    & (Join-Path $script:ComputerScripts "Collect-ComputerDiagnostics.ps1") -IncludeEnergyTrace @args
+}
+'@)
+    $aliases.Add("Set-Alias computer-diag Invoke-ComputerDiagnostics")
+    $aliases.Add("Set-Alias computer-energy Invoke-ComputerEnergyDiagnostics")
 }
 
+if ($Power) {
+    $functions.Add(@'
 function Invoke-ComputerPowerFix {
-    & (Join-Path `$script:ComputerScripts "Apply-ComputerPowerPolicy.ps1") @args
+    & (Join-Path $script:ComputerScripts "Apply-ComputerPowerPolicy.ps1") @args
+}
+'@)
+    $aliases.Add("Set-Alias computer-power-fix Invoke-ComputerPowerFix")
 }
 
+if ($Gpu) {
+    $functions.Add(@'
 function Invoke-ComputerGpuAnalyze {
-    & (Join-Path `$script:ComputerScripts "Get-DgpuProcesses.ps1") @args
+    & (Join-Path $script:ComputerScripts "Get-DgpuProcesses.ps1") @args
 }
 
 function Invoke-ComputerGpuDrain {
-    & (Join-Path `$script:ComputerScripts "Invoke-ComputerGpuDrain.ps1") -ShowNvidiaProcesses @args
+    & (Join-Path $script:ComputerScripts "Invoke-ComputerGpuDrain.ps1") -ShowNvidiaProcesses @args
 }
 
 function Invoke-ComputerGpuPreference {
-    & (Join-Path `$script:ComputerScripts "Set-AppGpuPreference.ps1") @args
+    & (Join-Path $script:ComputerScripts "Set-AppGpuPreference.ps1") @args
+}
+'@)
+    $aliases.Add("Set-Alias computer-gpu Invoke-ComputerGpuAnalyze")
+    $aliases.Add("Set-Alias computer-gpu-drain Invoke-ComputerGpuDrain")
+    $aliases.Add("Set-Alias computer-gpu-pref Invoke-ComputerGpuPreference")
 }
 
+if ($Display) {
+    $functions.Add(@'
 function Invoke-ComputerDisplayRefresh {
-    & (Join-Path `$script:ComputerScripts "Set-InternalDisplayRefresh.ps1") @args
+    & (Join-Path $script:ComputerScripts "Set-InternalDisplayRefresh.ps1") @args
+}
+'@)
+    $aliases.Add("Set-Alias computer-refresh Invoke-ComputerDisplayRefresh")
 }
 
+if ($Download) {
+    $functions.Add(@'
 function Start-ComputerDownloadMode {
-    & (Join-Path `$script:ComputerScripts "Start-TemporaryDownloadMode.ps1") @args
+    & (Join-Path $script:ComputerScripts "Start-TemporaryDownloadMode.ps1") @args
+}
+'@)
+    $aliases.Add("Set-Alias computer-download Start-ComputerDownloadMode")
 }
 
+if ($Navigation) {
+    $functions.Add(@'
 function Set-ComputerKitLocation {
-    Set-Location -LiteralPath `$script:ComputerKitRoot
+    Set-Location -LiteralPath $script:ComputerKitRoot
+}
+'@)
+    $aliases.Add("Set-Alias computer-kit Set-ComputerKitLocation")
 }
 
-Set-Alias computer-diag Invoke-ComputerDiagnostics
-Set-Alias computer-energy Invoke-ComputerEnergyDiagnostics
-Set-Alias computer-power-fix Invoke-ComputerPowerFix
-Set-Alias computer-gpu Invoke-ComputerGpuAnalyze
-Set-Alias computer-gpu-drain Invoke-ComputerGpuDrain
-Set-Alias computer-gpu-pref Invoke-ComputerGpuPreference
-Set-Alias computer-refresh Invoke-ComputerDisplayRefresh
-Set-Alias computer-download Start-ComputerDownloadMode
-Set-Alias computer-kit Set-ComputerKitLocation
+$content = @"
+# Computer Recovery Toolkit helper commands.
+# Generated for the Windows user that ran Install-ComputerAliases.ps1.
+`$script:ComputerKitRoot = "$kitRoot"
+`$script:ComputerScripts = Join-Path `$script:ComputerKitRoot "scripts"
+
+$($functions -join "`r`n")
+
+$($aliases -join "`r`n")
 "@
 
 Set-Content -LiteralPath $toolsPath -Value $content -Encoding UTF8
 
 $profiles = @(
     $PROFILE.CurrentUserCurrentHost,
+    $PROFILE.CurrentUserAllHosts,
     (Join-Path ([Environment]::GetFolderPath("MyDocuments")) "WindowsPowerShell\Microsoft.PowerShell_profile.ps1"),
     (Join-Path ([Environment]::GetFolderPath("MyDocuments")) "PowerShell\Microsoft.PowerShell_profile.ps1")
-) | Sort-Object -Unique
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique
 
 $begin = "# BEGIN Computer Recovery Toolkit aliases"
 $end = "# END Computer Recovery Toolkit aliases"
@@ -83,15 +140,14 @@ foreach ($profilePath in $profiles) {
         ""
     }
 
-    $pattern = "(?s)" + [regex]::Escape($begin) + ".*?" + [regex]::Escape($end)
-    $updated = if ($existing -match $pattern) {
-        [regex]::Replace($existing, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $loader })
-    } else {
-        ($existing.TrimEnd() + "`r`n`r`n" + $loader).TrimStart()
-    }
+    $pattern = "(?s)" + [regex]::Escape($begin) + ".*?" + [regex]::Escape($end) + "\r?\n?"
+    $existing = [regex]::Replace($existing, $pattern, "")
+    $updated = ($existing.TrimEnd() + "`r`n`r`n" + $loader + "`r`n").TrimStart()
 
     Set-Content -LiteralPath $profilePath -Value $updated -Encoding UTF8
-    Write-Host "Updated profile: $profilePath"
+    Write-Host "Updated profile for $env:USERNAME: $profilePath"
 }
 
-Write-Host "Aliases installed. Open a new PowerShell/Windows Terminal tab."
+$installedAliases = @($aliases | ForEach-Object { ($_ -split '\s+')[-2] })
+Write-Host ("Aliases installed for {0}: {1}" -f $env:USERNAME, (($installedAliases | Sort-Object) -join ", "))
+Write-Host "Open a new PowerShell/Windows Terminal tab to load the commands."

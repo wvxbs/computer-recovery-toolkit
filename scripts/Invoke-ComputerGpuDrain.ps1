@@ -18,6 +18,24 @@ function Write-DrainLog {
     Write-Host $line
 }
 
+function Find-NvidiaSmi {
+    $candidates = @(
+        (Join-Path $env:WINDIR "System32\nvidia-smi.exe"),
+        "$env:ProgramFiles\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+        "${env:ProgramFiles(x86)}\NVIDIA Corporation\NVSMI\nvidia-smi.exe"
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    $command = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { return $command.Source }
+    return $null
+}
+
 function Test-ExternalMonitorActive {
     try {
         $internalTechnology = 2147483648
@@ -105,10 +123,11 @@ function Restart-SafeShellProcesses {
 }
 
 function Write-NvidiaSnapshot {
-    if (Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue) {
-        nvidia-smi.exe 2>&1 | ForEach-Object { Write-DrainLog "  $_" }
+    $smiPath = Find-NvidiaSmi
+    if ($smiPath) {
+        & $smiPath 2>&1 | ForEach-Object { Write-DrainLog "  $_" }
     } else {
-        Write-DrainLog "nvidia-smi not found."
+        Write-DrainLog "nvidia-smi not found in known NVIDIA locations."
     }
 }
 
